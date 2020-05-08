@@ -15,8 +15,8 @@ COPY ./process_media.py /
 COPY ./music /etc/cron.daily/
 COPY ./movies /etc/cron.hourly/
 
-RUN chmod 0744 /etc/cron.daily/music
-RUN chmod 0744 /etc/cron.hourly/movies
+RUN chmod 0755 /etc/cron.daily/music
+RUN chmod 0755 /etc/cron.hourly/movies
 
 ENTRYPOINT []
 CMD ["cron", "-f"]
