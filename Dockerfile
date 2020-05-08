@@ -20,3 +20,4 @@ RUN chmod 0755 /etc/cron.hourly/movies
 
 ENTRYPOINT []
 CMD ["cron", "-f"]
+
