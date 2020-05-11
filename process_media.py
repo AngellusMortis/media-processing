@@ -167,6 +167,7 @@ class Processor(object):
         self._log(f"             Dry Run : {self.dry_run}")
         self._log(f"      Verbose Output : {self.verbose}")
         self._log(f"           Lock File : {self.lock.lockfile}")
+        self._log(f"         CPU Threads : {self.threads}")
 
         if log_file is not None:
             self._log(f"              Logger : {log_file}")
