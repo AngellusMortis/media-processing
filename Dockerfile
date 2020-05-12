@@ -15,11 +15,15 @@ RUN pip3 install ffmpeg-python click click-pacbar gevent tendo psutil
 
 COPY ./process_media.py /
 
+COPY ./entrypoint.sh /entrypoint.sh
+RUN chmod 0755 /entrypoint.sh
+
 COPY ./music /etc/cron.daily/
 RUN chmod 0755 /etc/cron.daily/music
 
 COPY ./movies /etc/cron.hourly/
 RUN chmod 0755 /etc/cron.hourly/movies
 
-ENTRYPOINT []
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["cron", "-f"]
+
