@@ -88,7 +88,7 @@ def _watch_progress(handler):
 
 
 @contextlib.contextmanager
-def show_progress(total_duration, proc):
+def show_progress(total_duration, proc=None):
     """Create a unix-domain socket to watch progress and render tqdm
     progress bar."""
 
@@ -100,10 +100,11 @@ def show_progress(total_duration, proc):
                 time = int(value)
                 bar.update(time - bar.pos)
 
-                now = time.monotonic()
-                if (now - last_print) > 600:
-                    proc._log(f"encode process {time/total_duration * 100}")
-                    last_print = now
+                if proc is not None:
+                    now = time.monotonic()
+                    if (now - last_print) > 600:
+                        proc._log(f"encode process {time/total_duration * 100}")
+                        last_print = now
 
             elif key == "progress" and value == "end":
                 bar.update(bar.length - bar.pos)
@@ -360,7 +361,7 @@ class Processor(object):
                 "id3v2_version": 3,
             }
 
-            with show_progress(total_duration, self) as socket_filename:
+            with show_progress(total_duration) as socket_filename:
                 try:
                     (
                         ffmpeg.input(file_path)
@@ -508,7 +509,7 @@ class Processor(object):
             if self.threads > 0:
                 options["threads"] = self.threads
 
-            with show_progress(total_duration) as socket_filename:
+            with show_progress(total_duration, self) as socket_filename:
                 try:
                     (
                         ffmpeg.input(from_path)
