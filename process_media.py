@@ -92,7 +92,7 @@ def show_progress(total_duration, proc=None):
     """Create a unix-domain socket to watch progress and render tqdm
     progress bar."""
 
-    last_print = 0
+    last_print = time.monotonic()
     with pacbar(length=total_duration) as bar:
 
         def handler(key, value):
@@ -102,8 +102,8 @@ def show_progress(total_duration, proc=None):
 
                 if proc is not None:
                     now = time.monotonic()
-                    if (now - last_print) > 600:
-                        proc._log(f"encode process {time/total_duration * 100}")
+                    if (now - last_print) > 300:
+                        proc._log(f"encode progress {time/total_duration * 100}")
                         last_print = now
 
             elif key == "progress" and value == "end":
