@@ -9,12 +9,14 @@ import shutil
 import socket
 import sys
 import tempfile
+import time
 from datetime import datetime
 
 import click
 import ffmpeg
 import gevent
 import gevent.monkey
+import time
 from pacbar import pacbar
 from tendo import singleton
 
@@ -86,15 +88,23 @@ def _watch_progress(handler):
 
 
 @contextlib.contextmanager
-def show_progress(total_duration):
+def show_progress(total_duration, proc):
     """Create a unix-domain socket to watch progress and render tqdm
     progress bar."""
+
+    last_print = 0
     with pacbar(length=total_duration) as bar:
 
         def handler(key, value):
             if key == "out_time_ms":
                 time = int(value)
                 bar.update(time - bar.pos)
+
+                now = time.monotonic()
+                if (now - last_print) > 600:
+                    proc._log(f"encode process {time/total_duration * 100}")
+                    last_print = now
+
             elif key == "progress" and value == "end":
                 bar.update(bar.length - bar.pos)
             elif key == "speed":
@@ -174,7 +184,8 @@ class Processor(object):
         self._log()
 
     def _log(self, message=""):
-        click.echo(message)
+        now = time.strftime("%Y-%m-%d %H:%M:%S")
+        click.echo(f"{now} {message}")
 
         if self.logger is not None:
             self.logger.info(message)
@@ -349,7 +360,7 @@ class Processor(object):
                 "id3v2_version": 3,
             }
 
-            with show_progress(total_duration) as socket_filename:
+            with show_progress(total_duration, self) as socket_filename:
                 try:
                     (
                         ffmpeg.input(file_path)
