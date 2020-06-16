@@ -97,13 +97,13 @@ def show_progress(total_duration, proc=None):
 
         def handler(key, value):
             if key == "out_time_ms":
-                time = int(value)
-                bar.update(time - bar.pos)
+                out_time = int(value)
+                bar.update(out_time - bar.pos)
 
                 if proc is not None:
                     now = time.monotonic()
                     if (now - last_print) > 300:
-                        proc._log(f"encode progress {time/total_duration * 100}")
+                        proc._log(f"encode progress {out_time/total_duration * 100}")
                         last_print = now
 
             elif key == "progress" and value == "end":
