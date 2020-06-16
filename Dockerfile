@@ -1,3 +1,8 @@
+###
+# docker pull docker.pkg.github.com/angellusmortis/media-processing/image:latest
+# docker create --cpus=12 -e CPUS_THREADS=12 -v /mnt/user/media/music:/music -v /mnt/user/media/movies:/movies -v /mnt/user/processing/movies:/processing --name Media docker.pkg.github.com/angellusmortis/media-processing/image:latest
+###
+
 FROM linuxserver/ffmpeg
 
 ENV CPU_THREADS 8
