@@ -41,10 +41,10 @@ COPY ./entrypoint.sh /entrypoint.sh
 RUN chmod 0755 /entrypoint.sh
 
 COPY ./music /etc/cron.daily/
-# RUN chmod 0755 /etc/cron.daily/music
+RUN chmod 0755 /etc/cron.daily/music
 
 COPY ./movies /etc/cron.hourly/
-# RUN chmod 0755 /etc/cron.hourly/movies
+RUN chmod 0755 /etc/cron.hourly/movies
 
 COPY ./rsync /etc/cron.d/rsync
 
