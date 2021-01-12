@@ -18,3 +18,12 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 # rsync Television:
 30 * * * *  root    /usr/bin/flock -n /tmp/sync_television.lock -c "/usr/bin/rsync -e 'ssh -i /ssh/id_rsa' -rvP --delete deluge@mort.is:/media/app/download/complete/television /download/ | tee /download/television.log > /proc/1/fd/1 2>/proc/1/fd/2"
+
+# rsync HA
+15 * * * * root /usr/bin/flock -n /tmp/sync_ha.lock -c "/usr/bin/rsync -e 'ssh -i /ssh/id_rsa' -rvP cbailey@pi-3.wl.mort.is:/backup/ /backup/ha/ > /proc/1/fd/1 2>/proc/1/fd/2"
+
+# rsync Unifi
+15 * * * * root /usr/bin/flock -n /tmp/sync_unifi_backup.lock -c "/usr/bin/scp -i /ssh/id_rsa -r root@192.168.1.1:/mnt/data/unifi-os/unifi/data/backup/ /backup/unifi/ > /proc/1/fd/1 2>/proc/1/fd/2"
+
+# scp Unifi/video
+45 * * * * root /usr/bin/flock -n /tmp/sync_unifi_security.lock -c "/usr/bin/scp -i /ssh/id_rsa -r root@192.168.1.1:/mnt/data_ext/unifi-os/unifi-protect/video/ /security/ > /proc/1/fd/1 2>/proc/1/fd/2"

@@ -4,10 +4,10 @@
 # docker pull docker.pkg.github.com/angellusmortis/media-processing/image:latest
 #
 # Create new image in Unraid
-# docker create --cpus=12 -e CPU_THREADS=12 -v /mnt/user/media/music:/music -v /mnt/user/media/movies:/movies -v /mnt/user/processing/movies:/processing/movies -v /boot/config/ssh/:/ssh -v /mnt/user/download/:/download -v /mnt/user/backup/:/backup --name MediaProcessing docker.pkg.github.com/angellusmortis/media-processing/image:latest
+# docker create --cpus=12 -e CPU_THREADS=12 -v /mnt/user/media/music:/music -v /mnt/user/media/movies:/movies -v /mnt/user/processing/movies:/processing/movies -v /boot/config/ssh/:/ssh -v /mnt/user/download/:/download -v /mnt/user/backup/:/backup -v /mnt/user/media/security:/security --name MediaProcessing docker.pkg.github.com/angellusmortis/media-processing/image:latest
 #
 # Run image
-# docker run --cpus=12 -e CPU_THREADS=12 -v /mnt/user/media/music:/music -v /mnt/user/media/movies:/movies -v /mnt/user/processing/movies:/processing/movies -v /boot/config/ssh/:/ssh -v /mnt/user/download/:/download -v /mnt/user/backup/:/backup docker.pkg.github.com/angellusmortis/media-processing/image:latest
+# docker run --cpus=12 -e CPU_THREADS=12 -v /mnt/user/media/music:/music -v /mnt/user/media/movies:/movies -v /mnt/user/processing/movies:/processing/movies -v /boot/config/ssh/:/ssh -v /mnt/user/download/:/download -v /mnt/user/backup/:/backup -v /mnt/user/media/security:/security docker.pkg.github.com/angellusmortis/media-processing/image:latest
 #
 # Build image
 #
