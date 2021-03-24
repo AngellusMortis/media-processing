@@ -17,6 +17,7 @@ import ffmpeg
 import gevent
 import gevent.monkey
 import time
+from gevent.subprocess import run, Popen, PIPE, STDOUT
 from pacbar import pacbar
 from tendo import singleton
 
@@ -79,9 +80,7 @@ def _watch_progress(handler):
         with contextlib.closing(sock):
             sock.bind(socket_filename)
             sock.listen(1)
-            child = gevent.spawn(
-                _do_watch_progress, socket_filename, sock, handler
-            )
+            child = gevent.spawn(_do_watch_progress, socket_filename, sock, handler)
             try:
                 yield socket_filename
             except Exception:
@@ -291,8 +290,7 @@ class Processor(object):
             return
 
         self._log(
-            f"({current}/{total}) {filename} - "
-            f"source: {original_resolution}p"
+            f"({current}/{total}) {filename} - " f"source: {original_resolution}p"
         )
 
         base_name = re.match(r"(.*\(\d+\))", filename).group(1)
@@ -307,9 +305,7 @@ class Processor(object):
             target_resolution = res["height"]
             if target_resolution == 480 and original_resolution > 480:
                 if self.verbose:
-                    self._log(
-                        "source resolution HD or better, skipping SD encode"
-                    )
+                    self._log("source resolution HD or better, skipping SD encode")
             elif current_resolution >= target_resolution:
                 current_resolution, source_file = self._process_resolution(
                     target_resolution,
@@ -321,9 +317,7 @@ class Processor(object):
                     file_folder,
                 )
 
-        base_output = os.path.join(
-            self.output_path, "main", file_folder
-        )
+        base_output = os.path.join(self.output_path, "main", file_folder)
         os.makedirs(base_output, exist_ok=True)
         os.chmod(base_output, 0o775)
         from_path = os.path.join(base_input, source_file)
@@ -352,8 +346,7 @@ class Processor(object):
 
         if not self.dry_run:
             total_duration = int(
-                float(ffmpeg.probe(file_path)["format"]["duration"])
-                * 1_000_000
+                float(ffmpeg.probe(file_path)["format"]["duration"]) * 1_000_000
             )
 
             options = {
@@ -371,9 +364,7 @@ class Processor(object):
                     (
                         ffmpeg.input(file_path)
                         .output(to_path, **options)
-                        .global_args(
-                            "-progress", "unix://{}".format(socket_filename)
-                        )
+                        .global_args("-progress", "unix://{}".format(socket_filename))
                         .run(capture_stdout=True, capture_stderr=True)
                     )
                 except ffmpeg.Error as e:
@@ -391,11 +382,7 @@ class Processor(object):
             self._log(f"probing {file_path}")
         probe = ffmpeg.probe(file_path)
         video_stream = next(
-            (
-                stream
-                for stream in probe["streams"]
-                if stream["codec_type"] == "video"
-            ),
+            (stream for stream in probe["streams"] if stream["codec_type"] == "video"),
             None,
         )
 
@@ -444,7 +431,6 @@ class Processor(object):
         if is_processed and current_resolution == target_resolution:
             return target_resolution, source_file
 
-        self._log(f"    encode: {source_file} -> {output_file}")
         self._encode_video(from_path, to_path, target_resolution, title)
 
         if current_resolution == 2160:
@@ -472,10 +458,35 @@ class Processor(object):
     def _encode_video(self, from_path, to_path, target_resolution, title):
         width = self.video_resolutions[target_resolution]["width"]
 
+        p = Popen(
+            f"ffmpeg -loglevel panic -i '{from_path}' -c:v copy -vbsf hevc_mp4toannexb -f hevc - | hdr10plus_parser --verify -",
+            shell=True,
+            stdin=PIPE,
+            stdout=PIPE,
+            stderr=STDOUT,
+            close_fds=True,
+        )
+        output = p.stdout.read().decode("utf8")
+
+        hdr_string = "none"
+        dynamic_hdr = None
+        if "Dynamic HDR10+ metadata detected." in output:
+            hdr_string = "dynamic"
+            dynamic_hdr = True
+            run(
+                f"ffmpeg -i '{from_path}' -c:v copy -vbsf hevc_mp4toannexb -f hevc - | hdr10plus_parser -o /tmp/metadata.json -",
+                shell=True,
+            )
+        elif "File doesn't contain dynamic metadata, stopping." in output:
+            hdr_string = "yes"
+            dynamic_hdr = False
+
+        self._log(f"    encode (hdr: {hdr_string}): {from_path} -> {to_path}")
         if self.verbose:
             self._log(f"        from_path : {from_path}")
             self._log(f"          to_path : {to_path}")
             self._log(f"target_resolution : {target_resolution}")
+            self._log(f"             hdr  : {hdr_string}")
             self._log(f"            width : {width}")
             self._log(f"            title : {title}")
 
@@ -490,8 +501,7 @@ class Processor(object):
                 bar.render_finish()
         else:
             total_duration = int(
-                float(ffmpeg.probe(from_path)["format"]["duration"])
-                * 1_000_000
+                float(ffmpeg.probe(from_path)["format"]["duration"]) * 1_000_000
             )
 
             options = {
@@ -502,19 +512,31 @@ class Processor(object):
                 "metadata": f"title={title}",
                 "metadata:s:a:0": "language=eng",
                 "map_chapters": 0,
-                "x265-params": 'keyint=60:bframes=3:vbv-bufsize=75000:vbv-maxrate=75000:hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte-st-2084:colormatrix=bt2020nc:master-display="G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,500)"',
                 "c:v": "libx265",
                 "sn": None,
                 "map_metadata": -1,
                 "profile:v": "main10",
                 "pix_fmt:v": "yuv420p10le",
-                "preset:v": "fast",
-                "crf": 21,
+                "preset:v": "veryfast",
+                "crf": 20,
                 "c:a:0": "aac",
                 "ac": 6,
                 "vf": f"scale={width}:-2:flags=lanczos",
                 "movflags": "+faststart",
             }
+
+            if dynamic_hdr is not None:
+                if dynamic_hdr:
+                    options["x265-params"] = (
+                        "colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:"
+                        "master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):"
+                        "max-cll=1016,115:hdr10=1:dhdr10-info=/tmp/metadata.json"
+                    )
+                else:
+                    options["x265-params"] = (
+                        "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:"
+                        "master-display=G(8500,39850)B(6550,2300)R(35400,14600)WP(15635,16450)L(40000000,50):max-cll=0,0"
+                    )
 
             if self.threads > 0:
                 options["threads"] = self.threads
@@ -524,9 +546,7 @@ class Processor(object):
                     (
                         ffmpeg.input(from_path)
                         .output(to_path, **options)
-                        .global_args(
-                            "-progress", "unix://{}".format(socket_filename)
-                        )
+                        .global_args("-progress", "unix://{}".format(socket_filename))
                         .run(capture_stdout=True, capture_stderr=True)
                     )
                 except ffmpeg.Error as e:
@@ -593,9 +613,7 @@ class Processor(object):
     ),
     is_flag=True,
 )
-@click.option(
-    "-l", "--log-file", help="File to log output to", type=click.Path()
-)
+@click.option("-l", "--log-file", help="File to log output to", type=click.Path())
 @click.option(
     "-t",
     "--threads",
