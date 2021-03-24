@@ -22,6 +22,8 @@ from tendo import singleton
 
 gevent.monkey.patch_all(thread=False)
 
+last_print = None
+
 
 @contextlib.contextmanager
 def _tmpdir_scope():
@@ -91,11 +93,14 @@ def _watch_progress(handler):
 def show_progress(total_duration, proc=None):
     """Create a unix-domain socket to watch progress and render tqdm
     progress bar."""
+    global last_print
 
     last_print = time.monotonic()
     with pacbar(length=total_duration) as bar:
 
         def handler(key, value):
+            global last_print
+
             if key == "out_time_ms":
                 out_time = int(value)
                 bar.update(out_time - bar.pos)
@@ -317,7 +322,7 @@ class Processor(object):
                 )
 
         base_output = os.path.join(
-            self.output_path, str(current_resolution) + "p", file_folder
+            self.output_path, "main", file_folder
         )
         os.makedirs(base_output, exist_ok=True)
         os.chmod(base_output, 0o775)
@@ -441,11 +446,13 @@ class Processor(object):
 
         self._log(f"    encode: {source_file} -> {output_file}")
         self._encode_video(from_path, to_path, target_resolution, title)
-        source_file = output_file
 
-        base_output = os.path.join(
-            output_path, str(current_resolution) + "p", file_folder
-        )
+        if current_resolution == 2160:
+            library_name = "2160p"
+        else:
+            library_name = "main"
+        base_output = os.path.join(output_path, library_name, file_folder)
+
         os.makedirs(base_output, exist_ok=True)
         os.chmod(base_output, 0o775)
         source_to_path = os.path.join(base_output, source_file)
@@ -493,6 +500,9 @@ class Processor(object):
                 "stats": None,
                 "hide_banner": None,
                 "metadata": f"title={title}",
+                "metadata:s:a:0": "language=eng",
+                "map_chapters": 0,
+                "x265-params": 'keyint=60:bframes=3:vbv-bufsize=75000:vbv-maxrate=75000:hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte-st-2084:colormatrix=bt2020nc:master-display="G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,500)"',
                 "c:v": "libx265",
                 "sn": None,
                 "map_metadata": -1,
