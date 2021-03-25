@@ -3,4 +3,4 @@
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 
-flock -n /tmp/process_movies.lock -c "process_media.py -p /processing/movies -o /movies -m movies -t ${CPU_THREADS}" > /proc/1/fd/1 2>/proc/1/fd/2
+flock -n /tmp/process_movies.lock -c "process_media -p /processing/movies -o /movies -m movies -t ${CPU_THREADS}" > /proc/1/fd/1 2>/proc/1/fd/2
