@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-from __future__ import print_function, unicode_literals
-
 import contextlib
+import json
 import logging
 import os
 import re
@@ -16,8 +15,7 @@ import click
 import ffmpeg
 import gevent
 import gevent.monkey
-import time
-from gevent.subprocess import run, Popen, PIPE, STDOUT
+from gevent.subprocess import PIPE, STDOUT, Popen, run
 from pacbar import pacbar
 from tendo import singleton
 
@@ -459,7 +457,7 @@ class Processor(object):
         width = self.video_resolutions[target_resolution]["width"]
 
         p = Popen(
-            f"ffmpeg -loglevel panic -i '{from_path}' -c:v copy -vbsf hevc_mp4toannexb -f hevc - | hdr10plus_parser --verify -",
+            f'ffmpeg -loglevel panic -i "{from_path}" -c:v copy -vbsf hevc_mp4toannexb -f hevc - | hdr10plus_parser --verify -',
             shell=True,
             stdin=PIPE,
             stdout=PIPE,
@@ -474,12 +472,23 @@ class Processor(object):
             hdr_string = "dynamic"
             dynamic_hdr = True
             run(
-                f"ffmpeg -i '{from_path}' -c:v copy -vbsf hevc_mp4toannexb -f hevc - | hdr10plus_parser -o /tmp/metadata.json -",
+                f'ffmpeg -i "{from_path}" -c:v copy -vbsf hevc_mp4toannexb -f hevc - | hdr10plus_parser -o /tmp/metadata.json -',
                 shell=True,
             )
-        elif "File doesn't contain dynamic metadata, stopping." in output:
-            hdr_string = "yes"
-            dynamic_hdr = False
+        else:
+            p = Popen(
+                f'ffprobe -v error -show_streams -select_streams v:0 -of json -i "{from_path}"',
+                shell=True,
+                stdin=PIPE,
+                stdout=PIPE,
+                stderr=STDOUT,
+                close_fds=True,
+            )
+            output = json.loads(p.stdout.read().decode("utf8"))
+
+            if output.get("streams", [{}])[0].get("color_primaries") == "bt2020":
+                hdr_string = "yes"
+                dynamic_hdr = False
 
         self._log(f"    encode (hdr: {hdr_string}): {from_path} -> {to_path}")
         if self.verbose:
