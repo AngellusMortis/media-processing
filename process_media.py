@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from __future__ import print_function, unicode_literals
 
 import contextlib
@@ -530,11 +530,11 @@ class Processor(object):
                     options["x265-params"] = (
                         "colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:"
                         "master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):"
-                        "max-cll=1016,115:hdr10=1:dhdr10-info=/tmp/metadata.json"
+                        "max-cll=1016,115:hdr10=1:frame-threads=0:dhdr10-info=/tmp/metadata.json"
                     )
                 else:
                     options["x265-params"] = (
-                        "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:"
+                        "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:frame-threads=0:"
                         "master-display=G(8500,39850)B(6550,2300)R(35400,14600)WP(15635,16450)L(40000000,50):max-cll=0,0"
                     )
 

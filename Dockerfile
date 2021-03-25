@@ -22,7 +22,7 @@ ENV CPU_THREADS 8
 RUN \
  echo "**** install runtime ****" && \
  apt-get update && \
- apt-get install -y python3 python3-pip cron rsync openssh-client && \
+ apt-get install -y python3 python3-pip cron rsync openssh-client expect && \
  echo "**** clean up ****" && \
  rm -rf \
     /var/lib/apt/lists/* \
@@ -37,7 +37,9 @@ RUN cd /tmp/ && curl -sLo hdr10plus_parser.tar.gz https://github.com/quietvoid/h
 
 RUN mkdir /processing /ssh /movies /music /download /root/.ssh
 
-COPY ./process_media.py /
+COPY ./process_media.py /usr/local/bin/process_media
+RUN chmod +x /usr/local/bin/process_media
+
 COPY ./known_hosts /root/.ssh/known_hosts
 RUN chmod 0600 /root/.ssh/known_hosts
 RUN chmod 0700 /root/.ssh/
@@ -45,13 +47,13 @@ RUN chmod 0700 /root/.ssh/
 COPY ./entrypoint.sh /entrypoint.sh
 RUN chmod 0755 /entrypoint.sh
 
-COPY ./music /etc/cron.daily/
-RUN chmod 0755 /etc/cron.daily/music
-
-COPY ./movies /etc/cron.hourly/
-RUN chmod 0755 /etc/cron.hourly/movies
-
-COPY ./rsync /etc/cron.d/rsync
+RUN mkdir -p /cron
+COPY ./music ./movies ./rsync /cron/
+RUN find /cron -type f | xargs chmod 0755;
 
 ENTRYPOINT ["/entrypoint.sh"]
+
+# COPY ./music /etc/cron.daily/
+# COPY ./movies /etc/cron.hourly/
+# COPY ./rsync /etc/cron.d/rsync
 CMD ["cron", "-f"]

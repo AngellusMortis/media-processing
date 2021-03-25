@@ -3,4 +3,4 @@
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 
-/usr/bin/flock -n /tmp/process_music.lock -c "python3 /process_media.py -p /music -o /music -m music" > /proc/1/fd/1 2>/proc/1/fd/2
+flock -n /tmp/process_music.lock -c "process_media -p /music -o /music -m music" > /proc/1/fd/1 2>/proc/1/fd/2
