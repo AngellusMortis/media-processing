@@ -18,6 +18,7 @@
 FROM linuxserver/ffmpeg
 
 ENV CPU_THREADS 8
+ENV RUN_GROUP rsync
 
 RUN \
  echo "**** install runtime ****" && \
