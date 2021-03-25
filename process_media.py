@@ -523,6 +523,7 @@ class Processor(object):
                 "ac": 6,
                 "vf": f"scale={width}:-2:flags=lanczos",
                 "movflags": "+faststart",
+                "x265-params": "frame-threads=0",
             }
 
             if dynamic_hdr is not None:
