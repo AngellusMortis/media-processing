@@ -54,7 +54,4 @@ RUN find /cron -type f | xargs chmod 0755;
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-# COPY ./music /etc/cron.daily/
-# COPY ./movies /etc/cron.hourly/
-# COPY ./rsync /etc/cron.d/rsync
 CMD ["cron", "-f"]

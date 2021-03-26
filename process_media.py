@@ -24,6 +24,11 @@ gevent.monkey.patch_all(thread=False)
 last_print = None
 
 
+class DuplicateString(str):
+    def __hash__(self):
+        return hash(str(id(self)))
+
+
 @contextlib.contextmanager
 def _tmpdir_scope():
     tmpdir = tempfile.mkdtemp()
@@ -87,13 +92,15 @@ def _watch_progress(handler):
 
 
 @contextlib.contextmanager
-def show_progress(total_duration, proc=None):
+def show_progress(total_duration, proc=None, seek=False):
     """Create a unix-domain socket to watch progress and render tqdm
     progress bar."""
     global last_print
 
     last_print = time.monotonic()
     with pacbar(length=total_duration) as bar:
+        if seek:
+            bar.label = "seeking..."
 
         def handler(key, value):
             global last_print
@@ -111,7 +118,8 @@ def show_progress(total_duration, proc=None):
             elif key == "progress" and value == "end":
                 bar.update(bar.length - bar.pos)
             elif key == "speed":
-                bar.label = f"{value:>7}"
+                if bar.label != "seeking..." or bar.pos > 0:
+                    bar.label = f"{value:>7}"
 
         with _watch_progress(handler) as socket_filename:
             yield socket_filename
@@ -127,6 +135,7 @@ class Processor(object):
     delete = True
     logger = None
     threads = 0
+    sample = False
 
     allowed_extensions = {
         "movies": ["mkv", "mp4", "avi", "m4v", "wmv", "m2ts"],
@@ -150,6 +159,7 @@ class Processor(object):
         dry_run,
         verbose,
         fake,
+        sample,
         no_delete,
         log_file,
         threads,
@@ -161,6 +171,7 @@ class Processor(object):
         self.verbose = verbose
         self.files_to_process = []
         self.fake = fake
+        self.sample = sample
         self.delete = not no_delete
         self.lock = singleton.SingleInstance(self.processing_mode)
         self.threads = threads
@@ -178,6 +189,7 @@ class Processor(object):
         self._log(f"    Output Directory : {self.output_path}")
         self._log(f"     Processing Mode : {self.processing_mode}")
         self._log(f"             Dry Run : {self.dry_run}")
+        self._log(f"              Delete : {self.delete}")
         self._log(f"      Verbose Output : {self.verbose}")
         self._log(f"           Lock File : {self.lock.lockfile}")
         self._log(f"         CPU Threads : {self.threads}")
@@ -233,7 +245,8 @@ class Processor(object):
                 files.remove(master)
                 for file_name in files:
                     file_path = os.path.join(root_path, file_name)
-                    self._run(f'os.remove("{file_path}")')
+                    if self.delete:
+                        self._run(f'os.remove("{file_path}")')
                 self.files_to_process.append(os.path.join(root_path, master))
             else:
                 self.files_to_process.append(os.path.join(root_path, files[0]))
@@ -412,7 +425,10 @@ class Processor(object):
         from_path = os.path.join(base_input, source_file)
         to_path = os.path.join(base_input, output_file)
         output_file = f"{base_name} - {target_resolution}p.mp4"
-        title = re.match(r"(.*) \(\d{4}\)", base_name).group(1)
+
+        title_parse = re.match(r"(.*) \((\d{4})\)", base_name)
+        title = title_parse.group(1)
+        release_year = title_parse.group(2)
         if title.endswith(", The"):
             title = f"The {title[:-5]}"
 
@@ -429,7 +445,7 @@ class Processor(object):
         if is_processed and current_resolution == target_resolution:
             return target_resolution, source_file
 
-        self._encode_video(from_path, to_path, target_resolution, title)
+        self._encode_video(from_path, to_path, target_resolution, title, release_year)
 
         if current_resolution == 2160:
             library_name = "2160p"
@@ -453,9 +469,7 @@ class Processor(object):
 
         return target_resolution, output_file
 
-    def _encode_video(self, from_path, to_path, target_resolution, title):
-        width = self.video_resolutions[target_resolution]["width"]
-
+    def _check_hdr(self, from_path):
         p = Popen(
             f'ffmpeg -loglevel panic -i "{from_path}" -c:v copy -vbsf hevc_mp4toannexb -f hevc - | hdr10plus_parser --verify -',
             shell=True,
@@ -466,10 +480,8 @@ class Processor(object):
         )
         output = p.stdout.read().decode("utf8")
 
-        hdr_string = "none"
         dynamic_hdr = None
         if "Dynamic HDR10+ metadata detected." in output:
-            hdr_string = "dynamic"
             dynamic_hdr = True
             run(
                 f'ffmpeg -i "{from_path}" -c:v copy -vbsf hevc_mp4toannexb -f hevc - | hdr10plus_parser -o /tmp/metadata.json -',
@@ -484,11 +496,60 @@ class Processor(object):
                 stderr=STDOUT,
                 close_fds=True,
             )
-            output = json.loads(p.stdout.read().decode("utf8"))
 
-            if output.get("streams", [{}])[0].get("color_primaries") == "bt2020":
-                hdr_string = "yes"
-                dynamic_hdr = False
+            try:
+                output = json.loads(p.stdout.read().decode("utf8"))
+            except json.decoder.JSONDecodeError:
+                pass
+            else:
+                streams = output.get("streams", [{}])
+
+                if len(streams) > 0 and streams[0].get("color_primaries") == "bt2020":
+                    dynamic_hdr = False
+
+        return dynamic_hdr
+
+    def _get_audio_track(self, from_path):
+        p = Popen(
+            f'ffprobe -v error -show_entries stream=index:stream_tags=language -select_streams a -of json -i "{from_path}"',
+            shell=True,
+            stdin=PIPE,
+            stdout=PIPE,
+            stderr=STDOUT,
+            close_fds=True,
+        )
+
+        track = 0
+        language = None
+
+        try:
+            output = json.loads(p.stdout.read().decode("utf8"))
+        except json.decoder.JSONDecodeError:
+            pass
+        else:
+            for index, stream in enumerate(output["streams"]):
+                lang = stream.get("tags", {}).get("language")
+
+                if lang == "eng" or index == 0:
+                    track = stream.get("index", index + 1) - 1
+                    language = lang
+
+                    if language == "eng":
+                        break
+
+        if language is None:
+            language = "eng"
+
+        if language != "eng":
+            self._log(f"could not find English audio track. Found: {language}")
+        return language, track
+
+    def _encode_video(self, from_path, to_path, target_resolution, title, release_year):
+        width = self.video_resolutions[target_resolution]["width"]
+
+        dynamic_hdr = self._check_hdr(from_path)
+        hdr_string = "none" if dynamic_hdr is None else ("yes" if dynamic_hdr else "no")
+        language, track = self._get_audio_track(from_path)
 
         self._log(f"    encode (hdr: {hdr_string}): {from_path} -> {to_path}")
         if self.verbose:
@@ -498,71 +559,93 @@ class Processor(object):
             self._log(f"             hdr  : {hdr_string}")
             self._log(f"            width : {width}")
             self._log(f"            title : {title}")
+            self._log(f"      audio track : {track}")
+            self._log(f"   subtitle track : {subtitle_track}")
 
-        if self.dry_run:
-            if self.fake:
-                import time
+        total_duration = int(
+            float(ffmpeg.probe(from_path)["format"]["duration"]) * 1_000_000
+        )
 
-                bar = pacbar(length=5)
-                for x in range(5):
-                    time.sleep(1)
-                    bar.update(1)
-                bar.render_finish()
-        else:
-            total_duration = int(
-                float(ffmpeg.probe(from_path)["format"]["duration"]) * 1_000_000
-            )
+        input_options = {
+            "y": None,
+            "v": "fatal",
+            "stats": None,
+            "hide_banner": None,
+        }
 
-            options = {
-                "y": None,
-                "v": "fatal",
-                "stats": None,
-                "hide_banner": None,
-                "metadata": f"title={title}",
-                "metadata:s:a:0": "language=eng",
-                "map_chapters": 0,
-                "c:v": "libx265",
-                "sn": None,
-                "map_metadata": -1,
-                "profile:v": "main10",
-                "pix_fmt:v": "yuv420p10le",
-                "preset:v": "veryfast",
-                "crf": 20,
-                "c:a:0": "aac",
-                "ac": 6,
-                "vf": f"scale={width}:-2:flags=lanczos",
-                "movflags": "+faststart",
-                "x265-params": "frame-threads=0",
-            }
+        output_options = {
+            DuplicateString("metadata"): f"title={title}",
+            DuplicateString("metadata"): f"year={release_year}",
+            "map_chapters": 0,
+            "map_metadata": -1,
+            "metadata:s:a:0": f"language={language}",
+            "profile:v": "main10",
+            "pix_fmt:v": "yuv420p10le",
+            "preset:v": "veryfast",
+            "crf": 20,
+            "movflags": "+faststart",
+            "vf": f"scale={width}:-2:flags=lanczos",
+            "x265-params": "frame-threads=0",
+            DuplicateString("map"): "0:v",
+            DuplicateString("map"): f"0:a:{track}",
+            "c:a": "aac",
+            "c:v": "libx265",
+        }
 
-            if dynamic_hdr is not None:
-                if dynamic_hdr:
-                    options["x265-params"] = (
-                        "colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:"
-                        "master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):"
-                        "max-cll=1016,115:hdr10=1:frame-threads=0:dhdr10-info=/tmp/metadata.json"
-                    )
+        if dynamic_hdr is not None:
+            if dynamic_hdr:
+                output_options["x265-params"] = (
+                    "colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:"
+                    "master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):"
+                    "max-cll=1016,115:hdr10=1:frame-threads=0:dhdr10-info=/tmp/metadata.json"
+                )
+            else:
+                output_options["x265-params"] = (
+                    "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:frame-threads=0:"
+                    "master-display=G(8500,39850)B(6550,2300)R(35400,14600)WP(15635,16450)L(40000000,50):max-cll=0,0"
+                )
+
+        seek = False
+        if self.sample and not from_path.endswith("p.mp4"):
+            input_options["ss"] = "00:03:30"
+            input_options["t"] = 30
+            total_duration = 30_000_000
+            seek = True
+
+        if self.threads > 0:
+            output_options["threads"] = self.threads
+
+        with show_progress(total_duration, self, seek=seek) as socket_filename:
+            try:
+                stream = ffmpeg.input(from_path, **input_options).output(
+                    to_path, **output_options
+                )
+
+                if self.dry_run:
+                    self._log(" ".join(stream.compile()))
+                    if self.fake:
+                        import time
+
+                        bar = pacbar(length=5)
+                        for x in range(5):
+                            time.sleep(1)
+                            bar.update(1)
+                        bar.render_finish()
                 else:
-                    options["x265-params"] = (
-                        "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:frame-threads=0:"
-                        "master-display=G(8500,39850)B(6550,2300)R(35400,14600)WP(15635,16450)L(40000000,50):max-cll=0,0"
-                    )
-
-            if self.threads > 0:
-                options["threads"] = self.threads
-
-            with show_progress(total_duration, self) as socket_filename:
-                try:
                     (
-                        ffmpeg.input(from_path)
-                        .output(to_path, **options)
-                        .global_args("-progress", "unix://{}".format(socket_filename))
-                        .run(capture_stdout=True, capture_stderr=True)
+                        stream.global_args(
+                            "-progress", "unix://{}".format(socket_filename)
+                        ).run(capture_stdout=True, capture_stderr=True)
                     )
-                except ffmpeg.Error as e:
-                    print("ffmpeg error")
-                    print(e.stderr, file=sys.stderr)
-                    sys.exit(1)
+            except ffmpeg.Error as e:
+                print("ffmpeg error")
+                print(e.stderr, file=sys.stderr)
+                sys.exit(1)
+
+            try:
+                socket_filename.close()
+            except AttributeError:
+                pass
 
     def _run(self, statement):
         if self.verbose:
@@ -612,6 +695,12 @@ class Processor(object):
     "-f",
     "--fake",
     help="Fake file encoding. Should be used with dry-run",
+    is_flag=True,
+)
+@click.option(
+    "-s",
+    "--sample",
+    help="Create sample files instead of processing the whole movie",
     is_flag=True,
 )
 @click.option(
