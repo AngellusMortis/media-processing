@@ -20,10 +20,10 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 30 * * * *  root    flock -n /tmp/sync_television.lock -c "unbuffer rsync -e 'ssh -i /ssh/id_rsa' -rv --partial --info=progress2 --delete deluge@mort.is:/media/app/download/complete/television /download/ | unbuffer -p sed 's/\r/\n/g' | tee /download/television.log > /proc/1/fd/1 2>/proc/1/fd/2"
 
 # rsync HA
-15 * * * * root flock -n /tmp/sync_ha.lock -c "unbuffer rsync -e 'ssh -i /ssh/id_rsa' -rv --partial --info=progress2 cbailey@pi-3.wl.mort.is:/backup/ /backup/ha/ | unbuffer -p sed 's/\r/\n/g' > /proc/1/fd/1 2>/proc/1/fd/2"
+15 * * * * root flock -n /tmp/sync_ha.lock -c "unbuffer rsync -e 'ssh -i /ssh/id_rsa' -rv --partial --info=progress2 cbailey@home.wl.mort.is:/backup/ /backup/ha/ | unbuffer -p sed 's/\r/\n/g' > /proc/1/fd/1 2>/proc/1/fd/2"
 
 # rsync Unifi
-15 * * * * root flock -n /tmp/sync_unifi_backup.lock -c "scp -i /ssh/id_rsa -r root@192.168.1.1:/mnt/data/unifi-os/unifi/data/backup/ /backup/unifi/ > /proc/1/fd/1 2>/proc/1/fd/2"
+15 * * * * root flock -n /tmp/sync_unifi_backup.lock -c "scp -p $(cat /ssh/passwd) -r root@192.168.1.1:/mnt/data/unifi-os/unifi/data/backup/ /backup/unifi/ > /proc/1/fd/1 2>/proc/1/fd/2"
 
 # scp Unifi/video
-45 * * * * root flock -n /tmp/sync_unifi_security.lock -c "scp -i /ssh/id_rsa -r root@192.168.1.1:/mnt/data_ext/unifi-os/unifi-protect/video/ /security/ > /proc/1/fd/1 2>/proc/1/fd/2"
+# 45 * * * * root flock -n /tmp/sync_unifi_security.lock -c "scp -p $(cat /ssh/passwd) -r root@192.168.1.1:/mnt/data_ext/unifi-os/unifi-protect/video/ /security/ > /proc/1/fd/1 2>/proc/1/fd/2"
