@@ -23,7 +23,7 @@ ENV RUN_GROUP rsync
 RUN \
  echo "**** install runtime ****" && \
  apt-get update && \
- apt-get install -y python3 python3-pip cron rsync openssh-client expect && \
+ apt-get install -y sshpass python3 python3-pip cron rsync openssh-client expect && \
  echo "**** clean up ****" && \
  rm -rf \
     /var/lib/apt/lists/* \

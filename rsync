@@ -26,4 +26,4 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 15 * * * * root flock -n /tmp/sync_unifi_backup.lock -c "scp -i /ssh/id_rsa -r root@192.168.1.1:/mnt/data/unifi-os/unifi/data/backup/ /backup/unifi/ > /proc/1/fd/1 2>/proc/1/fd/2"
 
 # scp Unifi/video
-# 45 * * * * root flock -n /tmp/sync_unifi_security.lock -c "scp -i /ssh/id_rsa -r root@192.168.1.1:/mnt/data_ext/unifi-os/unifi-protect/video/ /security/ > /proc/1/fd/1 2>/proc/1/fd/2"
+45 * * * * root flock -n /tmp/sync_unifi_security.lock -c "sshpass -f "/ssh/passwd" scp -r root@192.168.51.16:/srv/unifi-protect/video/ /security/ > /proc/1/fd/1 2>/proc/1/fd/2"
