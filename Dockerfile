@@ -40,7 +40,4 @@ COPY ./known_hosts /root/.ssh/known_hosts
 RUN chmod 0600 /root/.ssh/known_hosts
 RUN chmod 0700 /root/.ssh/
 
-COPY ./entrypoint.sh /entrypoint.sh
-RUN chmod 0755 /entrypoint.sh
-
 CMD ["cron", "-f"]
