@@ -1,6 +1,0 @@
-#!/bin/bash
-
-export LC_ALL=C.UTF-8
-export LANG=C.UTF-8
-
-flock -n /tmp/process_music.lock -c "process_media -p /music -o /music -m music" > /proc/1/fd/1 2>/proc/1/fd/2
