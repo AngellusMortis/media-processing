@@ -40,4 +40,8 @@ COPY ./known_hosts /root/.ssh/known_hosts
 RUN chmod 0600 /root/.ssh/known_hosts
 RUN chmod 0700 /root/.ssh/
 
-CMD ["cron", "-f"]
+COPY ./start.sh /usr/local/bin/start
+RUN chmod +x /usr/local/bin/start
+
+ENTRYPOINT []
+CMD ["start"]
